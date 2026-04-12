@@ -67,6 +67,8 @@
       padding: 6px 10px;
       border-bottom: 1px solid rgba(255,255,255,0.04);
       transition: background 0.12s, transform 0.15s, box-shadow 0.15s;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: rgba(99,102,241,0.15);
     }
 
     .card:hover { background: rgba(255,255,255,0.025); }
@@ -282,6 +284,7 @@
       justify-content: center;
       color: #27272a;
       font-size: 0.8rem;
+      pointer-events: none;
     }
 
     .agent-list::-webkit-scrollbar { width: 3px; }
@@ -289,11 +292,15 @@
     .agent-list::-webkit-scrollbar-thumb { background: #222; border-radius: 2px; }
 
     @media (max-width: 700px) {
+      html, body { position: fixed; width: 100%; height: 100%; overflow: hidden; }
       body { flex-direction: column; }
       .sidebar { width: 100%; min-width: 100%; height: auto; max-height: 17vh; }
-      .main { height: 83vh; }
+      .main { height: 83vh; display: flex; flex-direction: column; }
+      .wrap { position: static; flex: 1; display: flex; flex-direction: column; }
+      .wrap iframe { position: static; inset: auto; width: 100%; height: auto; flex: 1; touch-action: manipulation; }
       .sidebar-header { padding: 4px 10px; font-size: 0.75rem; }
-      .card { padding: 4px 10px; }
+      .card { padding: 4px 10px; cursor: pointer; }
+      .card-btn { visibility: visible; }
       .proj { font-size: 0.8rem; }
       .task { display: none; }
       .add-row { display: none; }
@@ -361,6 +368,7 @@
         body: JSON.stringify({_order: order})});
     }
 
+    const _isMobile = window.matchMedia('(max-width: 700px)').matches || 'ontouchstart' in window;
     let sel = null, data = {}, dragId = null;
     const list = document.getElementById('list');
     const addBtn = document.getElementById('addBtn');
@@ -374,12 +382,11 @@
         const isOO = OO_SET.has(id);
         c.className = 'card' + (id === sel ? ' sel' : '');
         c.id = 'c' + id;
-        c.draggable = true;
         c.dataset.aid = id;
         const ooTag = isOO ? '<span class="oo-tag" title="OpenOrchestra"></span>' : '';
         c.innerHTML = `
           <div class="card-top">
-            <div class="proj empty" id="p${id}"></div>
+            <div class="proj empty" id="p${id}">&nbsp;</div>
             <div class="card-btns">
               <button class="card-btn auto" id="a${id}" title="Auto-detect">A</button>
               <button class="card-btn edit" title="Edit name">✎</button>
@@ -388,11 +395,51 @@
             </div>
           </div>
           <div class="task" id="t${id}"></div>`;
-        c.addEventListener('click', e => {
-          if (e.target.classList.contains('del')) return;
-          if (e.target.tagName === 'INPUT') return;
-          pick(id);
-        });
+
+        // --- Mobile: touchend on entire card (most reliable) ---
+        if (_isMobile) {
+          c.style.cursor = 'pointer';
+          let _touchMoved = false;
+          c.addEventListener('touchstart', () => { _touchMoved = false; }, {passive: true});
+          c.addEventListener('touchmove', () => { _touchMoved = true; }, {passive: true});
+          c.addEventListener('touchend', e => {
+            if (_touchMoved) return; // was a scroll, not a tap
+            if (e.target.closest('.card-btn')) return; // button tap
+            if (e.target.tagName === 'INPUT') return;
+            e.preventDefault(); // prevent ghost click
+            pick(id);
+          });
+        } else {
+          // --- Desktop: click + drag ---
+          c.draggable = true;
+          c.style.cursor = 'grab';
+          c.addEventListener('click', e => {
+            if (e.target.closest('.card-btn')) return;
+            if (e.target.tagName === 'INPUT') return;
+            pick(id);
+          });
+          c.addEventListener('dragstart', e => { dragId = id; c.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
+          c.addEventListener('dragend', () => { dragId = null; c.classList.remove('dragging'); list.querySelectorAll('.card').forEach(el => el.classList.remove('drag-over-top','drag-over-bot')); });
+          c.addEventListener('dragover', e => {
+            e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+            if (c.dataset.aid === dragId) return;
+            const mid = c.getBoundingClientRect().top + c.getBoundingClientRect().height / 2;
+            c.classList.toggle('drag-over-top', e.clientY < mid);
+            c.classList.toggle('drag-over-bot', e.clientY >= mid);
+          });
+          c.addEventListener('dragleave', () => c.classList.remove('drag-over-top','drag-over-bot'));
+          c.addEventListener('drop', e => {
+            e.preventDefault();
+            if (!dragId || dragId === c.dataset.aid) return;
+            order.splice(order.indexOf(dragId), 1);
+            let idx = order.indexOf(c.dataset.aid);
+            if (e.clientY >= c.getBoundingClientRect().top + c.getBoundingClientRect().height / 2) idx++;
+            order.splice(idx, 0, dragId);
+            save(); build(); applyData();
+          });
+        }
+
+        // Button handlers (both mobile & desktop)
         c.querySelector('.card-btn.edit').addEventListener('click', e => {
           e.stopPropagation();
           startEdit(id);
@@ -414,27 +461,6 @@
           save();
           if (sel === id) { sel = null; document.getElementById('topbar').style.display = 'none'; }
           build(); applyData(); syncAddBtn();
-        });
-
-        // Drag
-        c.addEventListener('dragstart', e => { dragId = id; c.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
-        c.addEventListener('dragend', () => { dragId = null; c.classList.remove('dragging'); list.querySelectorAll('.card').forEach(el => el.classList.remove('drag-over-top','drag-over-bot')); });
-        c.addEventListener('dragover', e => {
-          e.preventDefault(); e.dataTransfer.dropEffect = 'move';
-          if (c.dataset.aid === dragId) return;
-          const mid = c.getBoundingClientRect().top + c.getBoundingClientRect().height / 2;
-          c.classList.toggle('drag-over-top', e.clientY < mid);
-          c.classList.toggle('drag-over-bot', e.clientY >= mid);
-        });
-        c.addEventListener('dragleave', () => c.classList.remove('drag-over-top','drag-over-bot'));
-        c.addEventListener('drop', e => {
-          e.preventDefault();
-          if (!dragId || dragId === c.dataset.aid) return;
-          order.splice(order.indexOf(dragId), 1);
-          let idx = order.indexOf(c.dataset.aid);
-          if (e.clientY >= c.getBoundingClientRect().top + c.getBoundingClientRect().height / 2) idx++;
-          order.splice(idx, 0, dragId);
-          save(); build(); applyData();
         });
 
         list.appendChild(c);
@@ -479,6 +505,63 @@
       const ph = document.getElementById('ph'); if (ph) ph.remove();
       const old = wrap.querySelector('iframe'); if (old) old.remove();
       const f = document.createElement('iframe'); f.src = path; wrap.appendChild(f);
+      if (_isMobile) enableIframeTouchScroll(f);
+    }
+
+    /* ── Touch scroll for xterm.js inside iframe ──
+       tmux mouse mode is ON → mouse wheel triggers copy-mode scroll
+       with yellow page counter. We translate touch swipe → WheelEvent
+       → xterm sends mouse wheel escape seq → tmux scrolls. */
+    function enableIframeTouchScroll(iframe) {
+      iframe.addEventListener('load', () => {
+        // xterm.js creates DOM after iframe load, poll until ready
+        let attempts = 0;
+        const poll = setInterval(() => {
+          if (++attempts > 50) { clearInterval(poll); return; }
+          try {
+            const win = iframe.contentWindow;
+            const doc = iframe.contentDocument || win.document;
+            const screen = doc.querySelector('.xterm-screen');
+            const term = win.term;
+            const ms = term?._core?._coreMouseService;
+            if (!screen || !ms) return;
+            clearInterval(poll);
+
+            const cols = term.cols, rows = term.rows;
+            const col = Math.floor(cols / 2), row = Math.floor(rows / 2);
+            let startY = 0, lastY = 0, scrolling = false, accum = 0;
+
+            screen.addEventListener('touchstart', e => {
+              if (e.touches.length !== 1) return;
+              startY = lastY = e.touches[0].clientY;
+              scrolling = false;
+              accum = 0;
+            }, {passive: true});
+
+            screen.addEventListener('touchmove', e => {
+              if (e.touches.length !== 1) return;
+              const y = e.touches[0].clientY;
+              if (!scrolling && Math.abs(startY - y) < 8) return;
+              scrolling = true;
+              const dy = lastY - y; // positive = finger up = scroll back
+              lastY = y;
+              accum += dy;
+              // Each 20px of movement = 1 scroll line
+              const lines = Math.trunc(accum / 20);
+              if (lines === 0) return;
+              accum -= lines * 20;
+              // natural scroll: finger down=back(history), finger up=forward
+              const back = lines < 0; // finger down → dy<0 → scroll back
+              const count = Math.abs(lines);
+              const evt = back
+                ? {col, row, x: col, y: row, button: 4, action: 0, ctrl: false, alt: false, shift: false}
+                : {col, row, x: col, y: row, button: 5, action: 1, ctrl: false, alt: false, shift: false};
+              for (let i = 0; i < count; i++) ms.triggerMouseEvent(evt);
+              e.preventDefault();
+            }, {passive: false});
+          } catch(e) { clearInterval(poll); }
+        }, 100);
+      });
     }
 
     function syncTop(info) {
