@@ -310,7 +310,7 @@
 <body>
   <div class="sidebar">
     <div class="sidebar-header">
-      Agents
+      Agents <span style="font-size:0.5rem;color:#333" title="version">v7</span>
       <div class="sys-stats" id="sysStats" onclick="this.classList.toggle('hidden');localStorage.setItem('stats-hidden',this.classList.contains('hidden'))">
         <span class="stat" id="cpuStat">CPU <span class="val" id="cpuVal">—</span></span>
         <span class="stat" id="ramStat">RAM <span class="val" id="ramVal">—</span></span>
@@ -368,7 +368,7 @@
         body: JSON.stringify({_order: order})});
     }
 
-    const _isMobile = window.matchMedia('(max-width: 700px)').matches || 'ontouchstart' in window;
+    const _isMobile = window.matchMedia('(max-width: 700px)').matches;
     let sel = null, data = {}, dragId = null;
     const list = document.getElementById('list');
     const addBtn = document.getElementById('addBtn');
@@ -396,28 +396,18 @@
           </div>
           <div class="task" id="t${id}"></div>`;
 
-        // --- Mobile: touchend on entire card (most reliable) ---
-        if (_isMobile) {
-          c.style.cursor = 'pointer';
-          let _touchMoved = false;
-          c.addEventListener('touchstart', () => { _touchMoved = false; }, {passive: true});
-          c.addEventListener('touchmove', () => { _touchMoved = true; }, {passive: true});
-          c.addEventListener('touchend', e => {
-            if (_touchMoved) return; // was a scroll, not a tap
-            if (e.target.closest('.card-btn')) return; // button tap
-            if (e.target.tagName === 'INPUT') return;
-            e.preventDefault(); // prevent ghost click
-            pick(id);
-          });
-        } else {
-          // --- Desktop: click + drag ---
+        // Click works on both mobile and desktop
+        c.style.cursor = 'pointer';
+        c.addEventListener('click', e => {
+          if (e.target.closest('.card-btn')) return;
+          if (e.target.tagName === 'INPUT') return;
+          pick(id);
+        });
+
+        // Desktop: drag to reorder
+        if (!_isMobile) {
           c.draggable = true;
           c.style.cursor = 'grab';
-          c.addEventListener('click', e => {
-            if (e.target.closest('.card-btn')) return;
-            if (e.target.tagName === 'INPUT') return;
-            pick(id);
-          });
           c.addEventListener('dragstart', e => { dragId = id; c.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
           c.addEventListener('dragend', () => { dragId = null; c.classList.remove('dragging'); list.querySelectorAll('.card').forEach(el => el.classList.remove('drag-over-top','drag-over-bot')); });
           c.addEventListener('dragover', e => {
@@ -504,17 +494,19 @@
       const wrap = document.getElementById('wrap');
       const ph = document.getElementById('ph'); if (ph) ph.remove();
       const old = wrap.querySelector('iframe'); if (old) old.remove();
-      const f = document.createElement('iframe'); f.src = path; wrap.appendChild(f);
+      const f = document.createElement('iframe'); f.src = path;
+      wrap.appendChild(f);
       if (_isMobile) enableIframeTouchScroll(f);
+      enableClipboardCopy(f);
+      const doFocus = () => { try { f.focus(); f.contentWindow?.focus(); } catch(e) {} };
+      f.addEventListener('load', doFocus);
+      f.addEventListener('mousedown', doFocus);
+      document.addEventListener('click', e => { if (wrap.contains(e.target) || e.target === f) doFocus(); });
     }
 
-    /* ── Touch scroll for xterm.js inside iframe ──
-       tmux mouse mode is ON → mouse wheel triggers copy-mode scroll
-       with yellow page counter. We translate touch swipe → WheelEvent
-       → xterm sends mouse wheel escape seq → tmux scrolls. */
+    /* ── Touch scroll for xterm.js inside iframe ── */
     function enableIframeTouchScroll(iframe) {
       iframe.addEventListener('load', () => {
-        // xterm.js creates DOM after iframe load, poll until ready
         let attempts = 0;
         const poll = setInterval(() => {
           if (++attempts > 50) { clearInterval(poll); return; }
@@ -543,15 +535,13 @@
               const y = e.touches[0].clientY;
               if (!scrolling && Math.abs(startY - y) < 8) return;
               scrolling = true;
-              const dy = lastY - y; // positive = finger up = scroll back
+              const dy = lastY - y;
               lastY = y;
               accum += dy;
-              // Each 20px of movement = 1 scroll line
               const lines = Math.trunc(accum / 20);
               if (lines === 0) return;
               accum -= lines * 20;
-              // natural scroll: finger down=back(history), finger up=forward
-              const back = lines < 0; // finger down → dy<0 → scroll back
+              const back = lines < 0;
               const count = Math.abs(lines);
               const evt = back
                 ? {col, row, x: col, y: row, button: 4, action: 0, ctrl: false, alt: false, shift: false}
@@ -559,6 +549,34 @@
               for (let i = 0; i < count; i++) ms.triggerMouseEvent(evt);
               e.preventDefault();
             }, {passive: false});
+          } catch(e) { clearInterval(poll); }
+        }, 100);
+      });
+    }
+
+    /* ── Clipboard: after mouse selection in tmux, copy buffer to system clipboard ── */
+    function enableClipboardCopy(iframe) {
+      iframe.addEventListener('load', () => {
+        let attempts = 0;
+        const poll = setInterval(() => {
+          if (++attempts > 50) { clearInterval(poll); return; }
+          try {
+            const doc = iframe.contentDocument || iframe.contentWindow.document;
+            if (!doc.querySelector('.xterm')) return;
+            clearInterval(poll);
+            let lastBuf = '';
+            doc.addEventListener('mouseup', () => {
+              setTimeout(() => {
+                fetch(location.origin + '/api/tmux-buffer/?session=global')
+                  .then(r => r.json())
+                  .then(d => {
+                    if (d.text && d.text !== lastBuf && d.text.trim()) {
+                      lastBuf = d.text;
+                      navigator.clipboard.writeText(d.text).catch(() => {});
+                    }
+                  }).catch(() => {});
+              }, 300);
+            });
           } catch(e) { clearInterval(poll); }
         }, 100);
       });
