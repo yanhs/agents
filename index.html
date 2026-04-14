@@ -565,22 +565,31 @@
             if (!doc.querySelector('.xterm')) return;
             clearInterval(poll);
             let lastBuf = '';
+            const bufUrl = location.origin + '/api/tmux-buffer/?session=global';
             doc.addEventListener('mouseup', () => {
-              const doCopy = async (retries) => {
-                try {
-                  const r = await fetch(location.origin + '/api/tmux-buffer/?session=global');
-                  const d = await r.json();
-                  if (d.text && d.text !== lastBuf && d.text.trim()) {
-                    lastBuf = d.text;
-                    await navigator.clipboard.writeText(d.text);
-                  } else if (retries > 0) {
-                    setTimeout(() => doCopy(retries - 1), 200);
-                  }
-                } catch(e) {
-                  if (retries > 0) setTimeout(() => doCopy(retries - 1), 200);
-                }
-              };
-              setTimeout(() => doCopy(2), 150);
+              // ClipboardItem with Promise: clipboard.write() is called synchronously
+              // inside the gesture, data resolves later from fetch
+              const textPromise = new Promise((resolve, reject) => {
+                setTimeout(async () => {
+                  try {
+                    const d = await (await fetch(bufUrl)).json();
+                    if (d.text && d.text !== lastBuf && d.text.trim()) {
+                      lastBuf = d.text;
+                      resolve(new Blob([d.text], {type: 'text/plain'}));
+                    } else reject();
+                  } catch { reject(); }
+                }, 150);
+              });
+              try {
+                navigator.clipboard.write([
+                  new ClipboardItem({'text/plain': textPromise})
+                ]).catch(() => {});
+              } catch(e) {
+                // Fallback: browser doesn't support ClipboardItem with promises
+                textPromise.then(blob => blob.text()).then(t =>
+                  navigator.clipboard.writeText(t).catch(() => {})
+                ).catch(() => {});
+              }
             });
           } catch(e) { clearInterval(poll); }
         }, 100);
