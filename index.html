@@ -566,16 +566,21 @@
             clearInterval(poll);
             let lastBuf = '';
             doc.addEventListener('mouseup', () => {
-              setTimeout(() => {
-                fetch(location.origin + '/api/tmux-buffer/?session=global')
-                  .then(r => r.json())
-                  .then(d => {
-                    if (d.text && d.text !== lastBuf && d.text.trim()) {
-                      lastBuf = d.text;
-                      navigator.clipboard.writeText(d.text).catch(() => {});
-                    }
-                  }).catch(() => {});
-              }, 300);
+              const doCopy = async (retries) => {
+                try {
+                  const r = await fetch(location.origin + '/api/tmux-buffer/?session=global');
+                  const d = await r.json();
+                  if (d.text && d.text !== lastBuf && d.text.trim()) {
+                    lastBuf = d.text;
+                    await navigator.clipboard.writeText(d.text);
+                  } else if (retries > 0) {
+                    setTimeout(() => doCopy(retries - 1), 200);
+                  }
+                } catch(e) {
+                  if (retries > 0) setTimeout(() => doCopy(retries - 1), 200);
+                }
+              };
+              setTimeout(() => doCopy(2), 150);
             });
           } catch(e) { clearInterval(poll); }
         }, 100);
