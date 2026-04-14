@@ -544,8 +544,8 @@
               const back = lines < 0;
               const count = Math.abs(lines);
               const evt = back
-                ? {col, row, x: col, y: row, button: 4, action: 0, ctrl: false, alt: false, shift: false}
-                : {col, row, x: col, y: row, button: 5, action: 1, ctrl: false, alt: false, shift: false};
+                ? {col, row, x: col, y: row, button: 5, action: 1, ctrl: false, alt: false, shift: false}
+                : {col, row, x: col, y: row, button: 4, action: 0, ctrl: false, alt: false, shift: false};
               for (let i = 0; i < count; i++) ms.triggerMouseEvent(evt);
               e.preventDefault();
             }, {passive: false});
