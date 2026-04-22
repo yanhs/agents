@@ -10,6 +10,7 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
+
     body {
       height: 100vh;
       overflow: hidden;
@@ -327,6 +328,7 @@
       <span class="topbar-lbl" id="tNum"></span>
       <div class="topbar-info" id="tInfo"></div>
       <a class="btn" id="tOpen" href="#" target="_blank">Open in tab</a>
+      <button class="btn" id="tEsc">Esc</button>
     </div>
     <div class="wrap" id="wrap">
       <div class="ph" id="ph">Select an agent</div>
@@ -369,7 +371,7 @@
     }
 
     const _isMobile = window.matchMedia('(max-width: 700px)').matches;
-    let sel = null, data = {}, dragId = null;
+    let sel = null, data = {}, dragId = null, _justDragged = false;
     const list = document.getElementById('list');
     const addBtn = document.getElementById('addBtn');
     const addOoBtn = document.getElementById('addOoBtn');
@@ -399,6 +401,7 @@
         // Click works on both mobile and desktop
         c.style.cursor = 'pointer';
         c.addEventListener('click', e => {
+          if (_justDragged) return;
           if (e.target.closest('.card-btn')) return;
           if (e.target.tagName === 'INPUT') return;
           pick(id);
@@ -480,6 +483,77 @@
     syncAddBtn();
     loadServerOrder();
 
+    /* ── Mobile: touch drag to reorder (long press) ── */
+    if (_isMobile) {
+      let _drag = null;
+
+      list.addEventListener('touchstart', e => {
+        const card = e.target.closest('.card');
+        if (!card || e.target.closest('.card-btn') || e.target.tagName === 'INPUT') return;
+        if (e.touches.length !== 1) return;
+        const t = e.touches[0];
+        _drag = { id: card.dataset.aid, el: card, startY: t.clientY, active: false,
+          timer: setTimeout(() => {
+            if (!_drag) return;
+            _drag.active = true;
+            card.classList.add('dragging');
+            if (navigator.vibrate) navigator.vibrate(30);
+          }, 400)
+        };
+      }, {passive: true});
+
+      list.addEventListener('touchmove', e => {
+        if (!_drag) return;
+        const t = e.touches[0];
+        if (!_drag.active) {
+          if (Math.abs(t.clientY - _drag.startY) > 8) {
+            clearTimeout(_drag.timer); _drag = null;
+          }
+          return;
+        }
+        e.preventDefault();
+        list.querySelectorAll('.card').forEach(el => {
+          el.classList.remove('drag-over-top', 'drag-over-bot');
+          if (el.dataset.aid === _drag.id) return;
+          const r = el.getBoundingClientRect();
+          if (t.clientY >= r.top && t.clientY <= r.bottom) {
+            el.classList.add(t.clientY < r.top + r.height / 2 ? 'drag-over-top' : 'drag-over-bot');
+          }
+        });
+      }, {passive: false});
+
+      list.addEventListener('touchend', e => {
+        if (!_drag) return;
+        clearTimeout(_drag.timer);
+        if (!_drag.active) { _drag = null; return; }
+        const t = e.changedTouches[0];
+        const fromId = _drag.id;
+        list.querySelectorAll('.card').forEach(el => el.classList.remove('dragging', 'drag-over-top', 'drag-over-bot'));
+        for (const el of list.querySelectorAll('.card')) {
+          if (el.dataset.aid === fromId) continue;
+          const r = el.getBoundingClientRect();
+          if (t.clientY >= r.top && t.clientY <= r.bottom) {
+            order.splice(order.indexOf(fromId), 1);
+            let idx = order.indexOf(el.dataset.aid);
+            if (t.clientY >= r.top + r.height / 2) idx++;
+            order.splice(idx, 0, fromId);
+            save(); build(); applyData(); syncAddBtn();
+            break;
+          }
+        }
+        _drag = null;
+        _justDragged = true;
+        setTimeout(() => _justDragged = false, 100);
+      });
+
+      list.addEventListener('touchcancel', () => {
+        if (!_drag) return;
+        clearTimeout(_drag.timer);
+        list.querySelectorAll('.card').forEach(el => el.classList.remove('dragging', 'drag-over-top', 'drag-over-bot'));
+        _drag = null;
+      });
+    }
+
     function pick(id) {
       sel = id;
       order.forEach(i => { const el = document.getElementById('c'+i); if(el) el.classList.toggle('sel', i===id); });
@@ -504,6 +578,24 @@
       document.addEventListener('click', e => { if (wrap.contains(e.target) || e.target === f) doFocus(); });
     }
 
+    /* ── Esc button: send Escape key to terminal iframe ── */
+    document.getElementById('tEsc').addEventListener('click', () => {
+      try {
+        const f = document.querySelector('#wrap iframe');
+        if (!f) return;
+        const win = f.contentWindow;
+        const term = win.term;
+        if (term) {
+          if (typeof term.input === 'function') { term.input('\x1b'); return; }
+          try { term._core.coreService.triggerDataEvent('\x1b'); return; } catch(e) {}
+          try { term._core._onData.fire('\x1b'); return; } catch(e) {}
+        }
+        const doc = f.contentDocument || win.document;
+        const el = doc.querySelector('.xterm-helper-textarea') || doc.activeElement || doc.body;
+        el.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape',code:'Escape',keyCode:27,which:27,bubbles:true}));
+      } catch(e) {}
+    });
+
     /* ── Touch scroll for xterm.js inside iframe ── */
     function enableIframeTouchScroll(iframe) {
       iframe.addEventListener('load', () => {
@@ -511,16 +603,11 @@
         const poll = setInterval(() => {
           if (++attempts > 50) { clearInterval(poll); return; }
           try {
-            const win = iframe.contentWindow;
-            const doc = iframe.contentDocument || win.document;
+            const doc = iframe.contentDocument || iframe.contentWindow.document;
             const screen = doc.querySelector('.xterm-screen');
-            const term = win.term;
-            const ms = term?._core?._coreMouseService;
-            if (!screen || !ms) return;
+            if (!screen) return;
             clearInterval(poll);
 
-            const cols = term.cols, rows = term.rows;
-            const col = Math.floor(cols / 2), row = Math.floor(rows / 2);
             let startY = 0, lastY = 0, scrolling = false, accum = 0;
 
             screen.addEventListener('touchstart', e => {
@@ -541,10 +628,21 @@
               const lines = Math.trunc(accum / 20);
               if (lines === 0) return;
               accum -= lines * 20;
-              const back = lines < 0;
               const count = Math.abs(lines);
-              const evt = {col, row, x: col, y: row, button: back ? 4 : 5, action: 0, ctrl: false, alt: false, shift: false};
-              for (let i = 0; i < count; i++) ms.triggerMouseEvent(evt);
+              const rect = screen.getBoundingClientRect();
+              const cx = rect.left + rect.width / 2;
+              const cy = rect.top + rect.height / 2;
+              const WE = iframe.contentWindow.WheelEvent;
+              for (let i = 0; i < count; i++) {
+                screen.dispatchEvent(new WE('wheel', {
+                  deltaY: lines > 0 ? 120 : -120,
+                  deltaMode: 0,
+                  bubbles: true,
+                  cancelable: true,
+                  clientX: cx,
+                  clientY: cy
+                }));
+              }
               e.preventDefault();
             }, {passive: false});
           } catch(e) { clearInterval(poll); }
