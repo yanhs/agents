@@ -292,6 +292,7 @@
     .agent-list::-webkit-scrollbar-track { background: transparent; }
     .agent-list::-webkit-scrollbar-thumb { background: #222; border-radius: 2px; }
 
+    /* mobile input bar */
     .mob-input { display: none; }
 
     @media (max-width: 700px) {
@@ -342,7 +343,7 @@
 <body>
   <div class="sidebar">
     <div class="sidebar-header">
-      Agents <span style="font-size:0.5rem;color:#333" title="version">v7</span>
+      TEST <span style="font-size:0.5rem;color:#333" title="version">v7-test</span>
       <div class="sys-stats" id="sysStats" onclick="this.classList.toggle('hidden');localStorage.setItem('stats-hidden',this.classList.contains('hidden'))">
         <span class="stat" id="cpuStat">CPU <span class="val" id="cpuVal">—</span></span>
         <span class="stat" id="ramStat">RAM <span class="val" id="ramVal">—</span></span>
@@ -599,7 +600,7 @@
       document.getElementById('tNum').textContent = '#' + id + (isOO ? ' · ' + OO_CONFIG[id]?.name : '');
       if (isOO) info.project = OO_CONFIG[id]?.name || 'Orchestra';
       syncTop(info);
-      const path = isOO ? '/' + (OO_CONFIG[id]?.path || 'terminal-oo') : '/' + (info.path || 'terminal');
+      const path = '/test-terminal';
       document.getElementById('tOpen').href = path;
       const wrap = document.getElementById('wrap');
       const ph = document.getElementById('ph'); if (ph) ph.remove();
@@ -613,35 +614,6 @@
       f.addEventListener('mousedown', doFocus);
       document.addEventListener('click', e => { if (wrap.contains(e.target) || e.target === f) doFocus(); });
     }
-
-    /* ── Mobile input bar ── */
-    function sendToTerminal(text) {
-      try {
-        const f = document.querySelector('#wrap iframe');
-        if (!f) return;
-        const term = f.contentWindow.term;
-        if (!term) return;
-        if (typeof term.input === 'function') { term.input(text); return; }
-        try { term._core.coreService.triggerDataEvent(text); return; } catch(e) {}
-        try { term._core._onData.fire(text); return; } catch(e) {}
-      } catch(e) {}
-    }
-
-    const mobText = document.getElementById('mobText');
-    document.getElementById('mobSend').addEventListener('click', () => {
-      const text = mobText.value;
-      sendToTerminal(text ? text + '\r' : '\r');
-      mobText.value = '';
-      mobText.focus();
-    });
-    mobText.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); document.getElementById('mobSend').click(); }
-    });
-    document.getElementById('mobEsc').addEventListener('click', () => {
-      sendToTerminal('\x03');
-      mobText.value = '';
-      mobText.focus();
-    });
 
     /* ── Esc button: send Escape key to terminal iframe ── */
     document.getElementById('tEsc').addEventListener('click', () => {
@@ -660,6 +632,46 @@
         el.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape',code:'Escape',keyCode:27,which:27,bubbles:true}));
       } catch(e) {}
     });
+
+    /* ── Mobile input bar: bypass IME by typing in our own field ── */
+    function sendToTerminal(text) {
+      try {
+        const f = document.querySelector('#wrap iframe');
+        if (!f) return;
+        const term = f.contentWindow.term;
+        if (!term) return;
+        // Try all known methods to send data
+        if (typeof term.input === 'function') { term.input(text); return; }
+        try { term._core.coreService.triggerDataEvent(text); return; } catch(e) {}
+        try { term._core._onData.fire(text); return; } catch(e) {}
+      } catch(e) {}
+    }
+
+    const mobText = document.getElementById('mobText');
+    const mobSend = document.getElementById('mobSend');
+    const mobEsc = document.getElementById('mobEsc');
+
+    mobSend.addEventListener('click', () => {
+      const text = mobText.value;
+      if (text) { sendToTerminal(text + '\r'); }
+      else { sendToTerminal('\r'); }
+      mobText.value = '';
+      mobText.focus();
+    });
+
+    mobText.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        mobSend.click();
+      }
+    });
+
+    mobEsc.addEventListener('click', () => {
+      sendToTerminal('\x03'); // Ctrl+C
+      mobText.value = '';
+      mobText.focus();
+    });
+
 
     /* ── Mobile: touch→mouse for tmux selection + vertical scroll ── */
     function enableIframeTouchScroll(iframe) {
@@ -684,6 +696,7 @@
               startY = lastY = t.clientY;
               mode = null;
               accum = 0;
+              // Send mousedown for tmux (start potential selection)
               screen.dispatchEvent(new MouseEvent('mousedown', {
                 clientX: t.clientX, clientY: t.clientY,
                 button: 0, bubbles: true
@@ -696,18 +709,21 @@
               const dx = Math.abs(t.clientX - startX);
               const dy = Math.abs(t.clientY - startY);
 
+              // Decide mode on first significant move
               if (!mode && (dx > 8 || dy > 8)) {
                 mode = dy > dx ? 'scroll' : 'select';
               }
               if (!mode) return;
 
               if (mode === 'select') {
+                // Horizontal drag → mouse move for tmux selection (yellow highlight)
                 screen.dispatchEvent(new MouseEvent('mousemove', {
                   clientX: t.clientX, clientY: t.clientY,
                   button: 0, buttons: 1, bubbles: true
                 }));
                 e.preventDefault();
               } else {
+                // Vertical drag → scroll
                 const dv = lastY - t.clientY;
                 lastY = t.clientY;
                 accum += dv;
@@ -737,6 +753,7 @@
                   clientX: t.clientX, clientY: t.clientY,
                   button: 0, bubbles: true
                 }));
+                // Copy tmux buffer to clipboard after selection
                 setTimeout(async () => {
                   try {
                     const d = await (await fetch(location.origin + '/api/tmux-buffer/?session=global')).json();
