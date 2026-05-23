@@ -180,6 +180,29 @@
     }
     .card-btn.edit:hover { background: rgba(129,140,248,0.15); color: #818cf8; }
     .card-btn.del:hover { background: rgba(239,68,68,0.15); color: #f87171; }
+    /* Bigger & more visible than the other card buttons — wider, brighter,
+       with a subtle green tint — but the SAME height so the card row stays
+       compact. */
+    .card-btn.compact {
+      visibility: visible;
+      width: auto;
+      min-width: 34px;
+      padding: 0 7px;
+      height: 16px;
+      line-height: 16px;
+      font-size: 1rem;
+      font-weight: 600;
+      color: rgba(134,239,172,0.55);
+      background: rgba(34,197,94,0.05);
+      border: 1px solid rgba(34,197,94,0.12);
+      opacity: 1;
+    }
+    .card-btn.compact:hover {
+      background: rgba(34,197,94,0.16);
+      border-color: rgba(34,197,94,0.32);
+      color: #86efac;
+    }
+    .card-btn.compact:active { transform: scale(0.94); }
     .card-btn.auto { visibility: visible; opacity: 0.3; }
     .card-btn.auto:hover { background: rgba(74,222,128,0.15); color: #4ade80; opacity: 1; }
     .card-btn.auto.active { opacity: 1; color: #4ade80; font-weight: 600; }
@@ -196,6 +219,36 @@
       outline: none;
       font-family: inherit;
     }
+
+    /* ── Per-agent model / effort selectors (bottom of each card) ── */
+    .card-cfg {
+      display: flex;
+      gap: 4px;
+      margin-top: 3px;
+      padding-left: 1px;
+    }
+    .cfg {
+      flex: 0 1 auto;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+      color: #52525b;
+      font: 500 0.62rem 'JetBrains Mono', monospace;
+      padding: 1px 4px;
+      border-radius: 3px;
+      cursor: pointer;
+      outline: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      appearance: none;
+      text-align: center;
+    }
+    .cfg:hover { border-color: rgba(255,255,255,0.14); color: #71717a; }
+    .cfg.set {
+      color: #a5b4fc;
+      border-color: rgba(129,140,248,0.35);
+      background: rgba(99,102,241,0.08);
+    }
+    .cfg option { background: #18181b; color: #e4e4e7; }
 
     /* ── Add buttons (inside the sidebar header, next to "Agents") ── */
     .header-add {
@@ -461,10 +514,28 @@
         c.id = 'c' + id;
         c.dataset.aid = id;
         const ooTag = isOO ? '<span class="oo-tag" title="OpenOrchestra"></span>' : '';
+        const cfg = isOO ? '' : `
+          <select class="cfg cfg-model" id="m${id}" title="Model — replayed on next launch">
+            <option value="">model</option>
+            <option value="opus">opus</option>
+            <option value="sonnet">sonnet</option>
+            <option value="haiku">haiku</option>
+          </select>
+          <select class="cfg cfg-effort" id="e${id}" title="Effort — replayed on next launch">
+            <option value="">effort</option>
+            <option value="auto">auto</option>
+            <option value="low">low</option>
+            <option value="medium">medium</option>
+            <option value="high">high</option>
+            <option value="xhigh">xhigh</option>
+            <option value="max">max</option>
+          </select>`;
         c.innerHTML = `
           <div class="card-top">
             <div class="proj empty" id="p${id}">&nbsp;</div>
             <div class="card-btns">
+              <button class="card-btn compact" title="Send /compact to TUI">⇲</button>
+              ${cfg}
               <button class="card-btn auto" id="a${id}" title="Auto-detect">A</button>
               <button class="card-btn edit" title="Edit name">✎</button>
               <button class="card-btn del" title="Remove">×</button>
@@ -523,6 +594,11 @@
               body: JSON.stringify({id, project: info.project || info.auto_project || ''})});
           }
         });
+        c.querySelector('.card-btn.compact').addEventListener('click', e => {
+          e.stopPropagation();
+          fetch('/api/terminal-status', {method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({id, action: 'compact'})}).catch(()=>{});
+        });
         c.querySelector('.card-btn.del').addEventListener('click', e => {
           e.stopPropagation();
           if (!confirm(`Выгрузить агент #${id} из памяти?\nБудет убит tmux-сеанс. Имя и история разговора сохранятся — при «+ Claude» агент вернётся ровно таким же.`)) return;
@@ -536,6 +612,30 @@
           if (sel === id) { sel = null; document.getElementById('topbar').style.display = 'none'; }
           build(); applyData(); syncAddBtn();
         });
+
+        // Per-agent model / effort. Persisted on the server; replayed by
+        // launch-claude-*.sh on the next tmux start (--model X + /effort X).
+        const mSel = c.querySelector('.cfg-model');
+        const eSel = c.querySelector('.cfg-effort');
+        if (mSel) mSel.addEventListener('change', e => {
+          e.stopPropagation();
+          fetch('/api/terminal-status', {method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({id, model: mSel.value})}).then(() => {
+              // Refresh local state from server so the badge style updates.
+              data[id] = {...(data[id]||{}), model: mSel.value};
+              applyData();
+            }).catch(()=>{});
+        });
+        if (eSel) eSel.addEventListener('change', e => {
+          e.stopPropagation();
+          fetch('/api/terminal-status', {method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({id, effort: eSel.value})}).then(() => {
+              data[id] = {...(data[id]||{}), effort: eSel.value};
+              applyData();
+            }).catch(()=>{});
+        });
+        // Click on a select should not trigger the card-level pick().
+        [mSel, eSel].forEach(s => s && s.addEventListener('click', e => e.stopPropagation()));
 
         list.appendChild(c);
       });
@@ -913,6 +1013,21 @@
         if(te) te.textContent = info.task||'';
         const ae = document.getElementById('a'+id);
         if(ae) ae.classList.toggle('active', !info.locked);
+        // Sync model / effort selects from server data. Only when the user
+        // isn't currently focused on the dropdown — otherwise their pick
+        // would get clobbered mid-selection.
+        const me = document.getElementById('m'+id);
+        if (me && document.activeElement !== me) {
+          const v = info.model || '';
+          if (me.value !== v) me.value = v;
+          me.classList.toggle('set', !!v);
+        }
+        const ee = document.getElementById('e'+id);
+        if (ee && document.activeElement !== ee) {
+          const v = info.effort || '';
+          if (ee.value !== v) ee.value = v;
+          ee.classList.toggle('set', !!v);
+        }
         if(id===sel) syncTop(info);
       });
     }
