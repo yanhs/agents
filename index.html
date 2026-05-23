@@ -58,7 +58,11 @@
     .stat.warn .val { color: #fbbf24; }
     .stat.crit .val { color: #f87171; }
 
-    .agent-list { flex: 1; overflow-y: auto; }
+    .agent-list { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; overscroll-behavior: contain; }
+    /* When a card is being dragged (long-press reorder on mobile), lock the
+       list so the browser does not scroll under the finger. The dragging
+       class is added by the touchstart timer in JS and removed on touchend. */
+    .agent-list:has(.card.dragging) { touch-action: none; }
 
     /* ── Card ── */
     .card {
@@ -193,26 +197,29 @@
       font-family: inherit;
     }
 
-    /* ── Add buttons ── */
-    .add-row {
+    /* ── Add buttons (inside the sidebar header, next to "Agents") ── */
+    .header-add {
       display: flex;
-      border-top: 1px solid rgba(255,255,255,0.06);
-      flex-shrink: 0;
+      gap: 4px;
+      margin-left: auto;
+      margin-right: 8px;
     }
 
     .add-btn {
-      flex: 1;
-      padding: 8px 10px;
+      background: rgba(99,102,241,0.12);
+      border: 1px solid rgba(99,102,241,0.25);
+      color: #a5b4fc;
+      font: 600 0.7rem 'Inter', system-ui, sans-serif;
+      padding: 3px 8px;
+      border-radius: 4px;
       cursor: pointer;
-      color: #3f3f46;
-      font-size: 0.78rem;
-      text-align: center;
       transition: all 0.12s;
+      line-height: 1.3;
     }
 
-    .add-btn:hover { color: #71717a; background: rgba(255,255,255,0.02); }
-    .add-btn.disabled { pointer-events: none; opacity: 0.3; }
-    .add-btn + .add-btn { border-left: 1px solid rgba(255,255,255,0.06); }
+    .add-btn:hover { background: rgba(99,102,241,0.22); color: #c7d2fe; }
+    .add-btn:active { transform: scale(0.96); }
+    .add-btn.disabled { pointer-events: none; opacity: 0.45; }
 
     /* ── Right area ── */
     .main {
@@ -306,7 +313,9 @@
       .card-btn { visibility: visible; }
       .proj { font-size: 0.8rem; }
       .task { display: none; }
-      .add-row { display: none; }
+      /* Compact header buttons on phone. */
+      .header-add { gap: 3px; margin-right: 6px; }
+      .add-btn { font-size: 0.68rem; padding: 2px 6px; }
 
       .mob-input {
         display: flex;
@@ -342,17 +351,17 @@
 <body>
   <div class="sidebar">
     <div class="sidebar-header">
-      Agents <span style="font-size:0.5rem;color:#333" title="version">v7</span>
+      <span class="title">Agents <span style="font-size:0.5rem;color:#333" title="version">v7</span></span>
+      <div class="header-add">
+        <button type="button" class="add-btn" id="addBtn" title="Добавить агента Claude">+ Claude</button>
+        <button type="button" class="add-btn" id="addOoBtn" title="Добавить агента Orchestra">+ Claw</button>
+      </div>
       <div class="sys-stats" id="sysStats" onclick="this.classList.toggle('hidden');localStorage.setItem('stats-hidden',this.classList.contains('hidden'))">
         <span class="stat" id="cpuStat">CPU <span class="val" id="cpuVal">—</span></span>
         <span class="stat" id="ramStat">RAM <span class="val" id="ramVal">—</span></span>
       </div>
     </div>
     <div class="agent-list" id="list"></div>
-    <div class="add-row">
-      <div class="add-btn" id="addBtn">+ Claude</div>
-      <div class="add-btn" id="addOoBtn">+ Claw</div>
-    </div>
   </div>
   <div class="main">
     <div class="topbar" id="topbar" style="display:none">
@@ -486,6 +495,12 @@
         });
         c.querySelector('.card-btn.del').addEventListener('click', e => {
           e.stopPropagation();
+          if (!confirm(`Выгрузить агент #${id} из памяти?\nБудет убит tmux-сеанс. Имя и история разговора сохранятся — при «+ Claude» агент вернётся ровно таким же.`)) return;
+          // Unload from RAM (kill tmux only). The conversation JSONL and the
+          // overrides entry (project/task/locked) are kept on disk so re-add
+          // restores both. Fire-and-forget — the server is idempotent.
+          fetch('/api/terminal-status', {method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({id, reset: true})}).catch(()=>{});
           order = order.filter(i => i !== id);
           save();
           if (sel === id) { sel = null; document.getElementById('topbar').style.display = 'none'; }
@@ -547,7 +562,9 @@
           }
           return;
         }
-        e.preventDefault();
+        // No preventDefault — the list's touch-action: none (while a card has
+        // .dragging) tells the browser to stop scrolling. passive: true keeps
+        // normal scroll-gesture latency at zero (no main-thread wait).
         list.querySelectorAll('.card').forEach(el => {
           el.classList.remove('drag-over-top', 'drag-over-bot');
           if (el.dataset.aid === _drag.id) return;
@@ -556,7 +573,7 @@
             el.classList.add(t.clientY < r.top + r.height / 2 ? 'drag-over-top' : 'drag-over-bot');
           }
         });
-      }, {passive: false});
+      }, {passive: true});
 
       list.addEventListener('touchend', e => {
         if (!_drag) return;
