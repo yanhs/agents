@@ -325,13 +325,15 @@
         flex-shrink: 0;
       }
       .mob-input input {
-        flex: 1;
+        flex: 1 1 0;        /* shrink past intrinsic width */
+        min-width: 0;       /* without this, the input refuses to shrink and
+                               pushes the arrow cluster + ↵ off-screen */
         background: #18181b;
         border: none;
         color: #e4e4e7;
         font-family: 'JetBrains Mono', monospace;
         font-size: 14px;
-        padding: 10px 12px;
+        padding: 10px 10px;
         outline: none;
       }
       .mob-input input::placeholder { color: #3f3f46; }
@@ -339,12 +341,34 @@
         background: none;
         border: none;
         color: #52525b;
-        font-size: 18px;
-        padding: 8px 12px;
+        font-size: 16px;
+        padding: 8px 8px;
         cursor: pointer;
         flex-shrink: 0;
       }
       .mob-input button:active { color: #818cf8; }
+      /* Brighten ↵ to match the cursor arrows — it's the most-used button. */
+      .mob-input #mobSend { color: #a1a1aa; font-size: 17px; }
+      .mob-input #mobSend:active { color: #818cf8; background: rgba(129,140,248,0.10); }
+
+      /* Cursor-arrow cluster: 4 compact pills sitting between input and ↵.
+         Kept narrow so right-arrow + ↵ stay on-screen even on the smallest
+         iPhone widths (≈ 320 CSS px). */
+      .mob-arrows {
+        display: flex;
+        gap: 1px;
+        align-items: stretch;
+        flex-shrink: 0;
+      }
+      .mob-arrows .mob-arrow {
+        padding: 8px 5px;
+        font-size: 14px;
+        line-height: 1;
+        color: #a1a1aa;
+        font-family: 'JetBrains Mono', monospace;
+        min-width: 22px;
+      }
+      .mob-arrows .mob-arrow:active { color: #818cf8; background: rgba(129,140,248,0.10); }
     }
   </style>
 </head>
@@ -376,6 +400,12 @@
     <div class="mob-input" id="mobInput">
       <button id="mobEsc" title="Ctrl+C">⎋</button>
       <input type="text" id="mobText" placeholder="Type here..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+      <div class="mob-arrows">
+        <button class="mob-arrow" id="mobLeft" title="Cursor left">←</button>
+        <button class="mob-arrow" id="mobUp" title="Cursor up / history">↑</button>
+        <button class="mob-arrow" id="mobDown" title="Cursor down / history">↓</button>
+        <button class="mob-arrow" id="mobRight" title="Cursor right">→</button>
+      </div>
       <button id="mobSend" title="Send">↵</button>
     </div>
   </div>
@@ -659,6 +689,23 @@
       mobText.value = '';
       mobText.focus();
     });
+    /* ── Cursor arrows: send ANSI sequences. preventDefault stops the click
+       from stealing focus from the iframe, so repeated taps keep working. ── */
+    const ARROW_KEYS = {
+      mobLeft:  '\x1b[D',
+      mobRight: '\x1b[C',
+      mobUp:    '\x1b[A',
+      mobDown:  '\x1b[B',
+    };
+    for (const [id, seq] of Object.entries(ARROW_KEYS)) {
+      const btn = document.getElementById(id);
+      if (!btn) continue;
+      btn.addEventListener('mousedown', e => e.preventDefault());
+      btn.addEventListener('click', e => {
+        e.preventDefault();
+        sendToTerminal(seq);
+      });
+    }
 
     /* ── Esc button: send Escape key to terminal iframe ── */
     document.getElementById('tEsc').addEventListener('click', () => {
