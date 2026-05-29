@@ -526,7 +526,7 @@
         c.dataset.aid = id;
         const ooTag = isOO ? '<span class="oo-tag" title="OpenOrchestra"></span>' : '';
         const cfg = isOO ? '' : `
-          <select class="cfg cfg-model" id="m${id}" title="Model — replayed on next launch">
+          <select class="cfg cfg-model" id="m${id}" title="Model — reflects the live TUI model; changing it sends /model to the terminal">
             <option value="">model</option>
             <option value="opus">opus</option>
             <option value="sonnet">sonnet</option>
@@ -616,8 +616,11 @@
           build(); applyData(); syncAddBtn();
         });
 
-        // Per-agent model / effort. Persisted on the server; replayed by
-        // launch-claude-*.sh on the next tmux start (--model X + /effort X).
+        // Per-agent model / effort. Changing the model POSTs /model into the
+        // live TUI; the server then reports the *live* model back (read from the
+        // session transcript), so the button tracks /model changes made inside
+        // the terminal too, and a resume keeps that model instead of reverting.
+        // Effort is still persisted in agents.json and replayed via /effort.
         const mSel = c.querySelector('.cfg-model');
         const eSel = c.querySelector('.cfg-effort');
         if (mSel) mSel.addEventListener('change', e => {
