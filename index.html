@@ -35,23 +35,24 @@
     }
 
     .sidebar-header {
-      padding: 0.75rem 1rem;
+      padding: 0.5rem 0.8rem;
       border-bottom: 1px solid rgba(255,255,255,0.06);
       font-size: 0.85rem;
       font-weight: 600;
       color: #fafafa;
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      gap: 0.6rem;
     }
 
     .sys-stats {
       display: flex;
-      gap: 0.6rem;
-      font-size: 0.65rem;
+      gap: 0.5rem;
+      font-size: 0.62rem;
       font-weight: 400;
       font-family: 'JetBrains Mono', monospace;
       cursor: pointer;
+      margin-left: auto;
     }
 
     .sys-stats.hidden .val { display: none; }
@@ -167,39 +168,32 @@
     }
 
     .card-btn {
-      visibility: hidden;
-      width: 16px;
-      height: 16px;
-      border: none;
-      border-radius: 3px;
-      background: transparent;
-      color: #3f3f46;
-      font-size: 0.6rem;
+      visibility: visible;
+      width: 22px;
+      height: 22px;
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 4px;
+      background: rgba(255,255,255,0.03);
+      color: rgba(161,161,170,0.55);
+      font-size: 0.85rem;
       cursor: pointer;
-      line-height: 16px;
+      line-height: 20px;
       text-align: center;
       transition: all 0.12s;
       flex-shrink: 0;
     }
-    .card-btn.edit, .card-btn.del { visibility: visible; }
-    .card-btn.edit:hover { background: rgba(129,140,248,0.15); color: #818cf8; }
-    .card-btn.del:hover { background: rgba(239,68,68,0.15); color: #f87171; }
-    /* Bigger & more visible than the other card buttons — wider, brighter,
-       with a subtle green tint — but the SAME height so the card row stays
-       compact. */
+    .card-btn:hover { background: rgba(255,255,255,0.08); color: #e4e4e7; border-color: rgba(255,255,255,0.16); }
+    .card-btn.edit { color: rgba(165,180,252,0.55); background: rgba(99,102,241,0.05); border-color: rgba(99,102,241,0.12); }
+    .card-btn.edit:hover { background: rgba(99,102,241,0.16); color: #c7d2fe; border-color: rgba(99,102,241,0.32); }
+    .card-btn.del { color: rgba(252,165,165,0.55); background: rgba(239,68,68,0.05); border-color: rgba(239,68,68,0.12); }
+    .card-btn.del:hover { background: rgba(239,68,68,0.16); color: #fecaca; border-color: rgba(239,68,68,0.32); }
+    /* Compact button — same dimensions as other row-1 buttons (22×22),
+       with a subtle green tint to stand out as the action button. */
     .card-btn.compact {
-      visibility: visible;
-      width: auto;
-      min-width: 34px;
-      padding: 0 7px;
-      height: 16px;
-      line-height: 16px;
-      font-size: 1rem;
       font-weight: 600;
       color: rgba(134,239,172,0.55);
       background: rgba(34,197,94,0.05);
-      border: 1px solid rgba(34,197,94,0.12);
-      opacity: 1;
+      border-color: rgba(34,197,94,0.12);
     }
     .card-btn.compact:hover {
       background: rgba(34,197,94,0.16);
@@ -207,10 +201,6 @@
       color: #86efac;
     }
     .card-btn.compact:active { transform: scale(0.94); }
-    .card-btn.auto { visibility: visible; opacity: 0.3; }
-    .card-btn.auto:hover { background: rgba(74,222,128,0.15); color: #4ade80; opacity: 1; }
-    .card-btn.auto.active { opacity: 1; color: #4ade80; font-weight: 600; }
-    .card:hover .card-btn { visibility: visible; }
 
     .proj-edit {
       font-size: 0.82rem;
@@ -254,7 +244,7 @@
     }
     .cfg option { background: #18181b; color: #e4e4e7; }
 
-    /* ── Second row on each card (desktop only): task text left + compact/model/effort right ── */
+    /* ── Second row on each card (desktop): task text on left, compact/model/effort on right ── */
     .card-row2 {
       display: flex;
       align-items: center;
@@ -270,14 +260,10 @@
       flex-shrink: 0;
     }
 
-    /* ── Add buttons: footer on desktop, header row on mobile ── */
-    .header-add { display: none; }
-    .sidebar-footer {
+    /* ── Add buttons (inside the sidebar header, next to "Agents") ── */
+    .header-add {
       display: flex;
-      gap: 6px;
-      padding: 6px 10px;
-      border-top: 1px solid rgba(255,255,255,0.06);
-      flex-shrink: 0;
+      gap: 4px;
     }
 
     .add-btn {
@@ -386,19 +372,17 @@
       .sidebar-header { padding: 4px 10px; font-size: 0.75rem; }
       /* One row per agent: card becomes a horizontal flex container */
       .card { display: flex; align-items: center; padding: 3px 8px; cursor: pointer; gap: 4px; }
-      .card-top { flex: 1; min-width: 0; }
-      .card-btn { visibility: visible; }
+      .card-top { flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; }
+      .card-btn { visibility: visible; width: 20px; height: 20px; line-height: 18px; font-size: 0.8rem; }
       .proj { font-size: 0.8rem; }
       .task { display: none; }
-      /* card-row2: strip task + compact, keep model/effort inline to the right */
-      .card-row2 { display: flex; margin: 0; padding: 0; flex-shrink: 0; }
-      .card-row2 .task { display: none; }
-      .card-btn.compact { display: none; }
-      .card-cfg { margin: 0; padding: 0; gap: 3px; }
+      /* card-row2: drop task + paddings, keep model/effort/compact inline */
+      .card-row2 { display: flex; align-items: center; margin: 0; padding: 0; flex-shrink: 0; }
+      .card-row2-right { gap: 3px; }
       .cfg { font-size: 0.58rem; padding: 1px 3px; }
+      /* Compact header buttons on phone. */
+      .header-add { gap: 3px; }
       .add-btn { font-size: 0.68rem; padding: 2px 6px; }
-      .header-add { display: flex; gap: 3px; margin-left: auto; margin-right: 4px; }
-      .sidebar-footer { display: none; }
 
       .mob-input {
         display: flex;
@@ -458,10 +442,8 @@
 <body>
   <div class="sidebar">
     <div class="sidebar-header">
-      <span class="title">Agents <span style="font-size:0.5rem;color:#333" title="version">v8</span></span>
       <div class="header-add">
-        <button type="button" class="add-btn" id="addBtnH" title="Добавить агента Claude">+ Claude</button>
-        <button type="button" class="add-btn" id="addOoBtnH" title="Добавить агента Orchestra">+ Claw</button>
+        <button type="button" class="add-btn" id="addBtn" title="Добавить агента Claude">+ Claude</button>
       </div>
       <div class="sys-stats" id="sysStats" onclick="this.classList.toggle('hidden');localStorage.setItem('stats-hidden',this.classList.contains('hidden'))">
         <span class="stat" id="cpuStat">CPU <span class="val" id="cpuVal">—</span></span>
@@ -469,10 +451,6 @@
       </div>
     </div>
     <div class="agent-list" id="list"></div>
-    <div class="sidebar-footer">
-      <button type="button" class="add-btn" id="addBtn" title="Добавить агента Claude">+ Claude</button>
-      <button type="button" class="add-btn" id="addOoBtn" title="Добавить агента Orchestra">+ Claw</button>
-    </div>
   </div>
   <div class="main">
     <div class="topbar" id="topbar" style="display:none">
@@ -536,9 +514,6 @@
     let sel = null, data = {}, dragId = null, _justDragged = false;
     const list = document.getElementById('list');
     const addBtn = document.getElementById('addBtn');
-    const addOoBtn = document.getElementById('addOoBtn');
-    const addBtnH = document.getElementById('addBtnH');
-    const addOoBtnH = document.getElementById('addOoBtnH');
     if (localStorage.getItem('stats-hidden') === 'true') document.getElementById('sysStats').classList.add('hidden');
 
     function build() {
@@ -566,16 +541,13 @@
             <option value="xhigh">xhigh</option>
             <option value="max">max</option>
           </select>`;
-        const row2controls = isOO ? '' : `
-          <div class="card-row2-right">
-            <button class="card-btn compact" title="Send /compact to TUI">⇲</button>
-            ${cfg}
-          </div>`;
+        const compactHtml = isOO ? '' : `<button class="card-btn compact" title="Send /compact to TUI">⇲</button>`;
+        const row2controls = isOO ? '' : `<div class="card-row2-right">${cfg}</div>`;
         c.innerHTML = `
           <div class="card-top">
             <div class="proj empty" id="p${id}">&nbsp;</div>
             <div class="card-btns">
-              <button class="card-btn auto" id="a${id}" title="Auto-detect">A</button>
+              ${compactHtml}
               <button class="card-btn edit" title="Edit name">✎</button>
               <button class="card-btn del" title="Remove">×</button>
               ${ooTag}<span class="dot off" id="d${id}"></span>
@@ -625,25 +597,14 @@
           e.stopPropagation();
           startEdit(id);
         });
-        c.querySelector('.card-btn.auto').addEventListener('click', e => {
-          e.stopPropagation();
-          const info = data[id]||{};
-          if (info.locked) {
-            fetch('/api/terminal-status', {method:'POST', headers:{'Content-Type':'application/json'},
-              body: JSON.stringify({id, unlock: true})});
-          } else {
-            fetch('/api/terminal-status', {method:'POST', headers:{'Content-Type':'application/json'},
-              body: JSON.stringify({id, project: info.project || info.auto_project || ''})});
-          }
-        });
-        c.querySelector('.card-btn.compact').addEventListener('click', e => {
+        const compactBtn = c.querySelector('.card-btn.compact');
+        if (compactBtn) compactBtn.addEventListener('click', e => {
           e.stopPropagation();
           fetch('/api/terminal-status', {method:'POST', headers:{'Content-Type':'application/json'},
             body: JSON.stringify({id, action: 'compact'})}).catch(()=>{});
         });
         c.querySelector('.card-btn.del').addEventListener('click', e => {
           e.stopPropagation();
-          if (!confirm(`Выгрузить агент #${id} из памяти?\nБудет убит tmux-сеанс. Имя и история разговора сохранятся — при «+ Claude» агент вернётся ровно таким же.`)) return;
           // Unload from RAM (kill tmux only). The conversation JSONL and the
           // overrides entry (project/task/locked) are kept on disk so re-add
           // restores both. Fire-and-forget — the server is idempotent.
@@ -684,36 +645,11 @@
     }
 
     function syncAddBtn() {
-      const claudeFull = CLAUDE_IDS.every(id => order.includes(id));
-      const ooFull = OO_IDS.every(id => order.includes(id));
-      addBtn.classList.toggle('disabled', claudeFull);
-      addOoBtn.classList.toggle('disabled', ooFull);
-      addBtnH.classList.toggle('disabled', claudeFull);
-      addOoBtnH.classList.toggle('disabled', ooFull);
+      addBtn.classList.toggle('disabled', CLAUDE_IDS.every(id => order.includes(id)));
     }
 
     addBtn.addEventListener('click', () => {
       const next = CLAUDE_IDS.find(id => !order.includes(id));
-      if (!next) return;
-      order.push(next);
-      save(); build(); applyData(); syncAddBtn();
-    });
-
-    addOoBtn.addEventListener('click', () => {
-      const next = OO_IDS.find(id => !order.includes(id));
-      if (!next) return;
-      order.push(next);
-      save(); build(); applyData(); syncAddBtn();
-    });
-
-    addBtnH.addEventListener('click', () => {
-      const next = CLAUDE_IDS.find(id => !order.includes(id));
-      if (!next) return;
-      order.push(next);
-      save(); build(); applyData(); syncAddBtn();
-    });
-    addOoBtnH.addEventListener('click', () => {
-      const next = OO_IDS.find(id => !order.includes(id));
       if (!next) return;
       order.push(next);
       save(); build(); applyData(); syncAddBtn();
@@ -1070,8 +1006,6 @@
         if(pe && !pe.querySelector('input')){ pe.textContent = info.project||''; pe.classList.toggle('empty',!info.project); }
         const te = document.getElementById('t'+id);
         if(te) te.textContent = info.task||'';
-        const ae = document.getElementById('a'+id);
-        if(ae) ae.classList.toggle('active', !info.locked);
         // Sync model / effort selects from server data. Only when the user
         // isn't currently focused on the dropdown — otherwise their pick
         // would get clobbered mid-selection.
