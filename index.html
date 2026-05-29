@@ -181,6 +181,7 @@
       transition: all 0.12s;
       flex-shrink: 0;
     }
+    .card-btn.edit, .card-btn.del { visibility: visible; }
     .card-btn.edit:hover { background: rgba(129,140,248,0.15); color: #818cf8; }
     .card-btn.del:hover { background: rgba(239,68,68,0.15); color: #f87171; }
     /* Bigger & more visible than the other card buttons — wider, brighter,
@@ -253,12 +254,30 @@
     }
     .cfg option { background: #18181b; color: #e4e4e7; }
 
-    /* ── Add buttons (inside the sidebar header, next to "Agents") ── */
-    .header-add {
+    /* ── Second row on each card (desktop only): task text left + compact/model/effort right ── */
+    .card-row2 {
       display: flex;
+      align-items: center;
+      justify-content: space-between;
       gap: 4px;
-      margin-left: auto;
-      margin-right: 8px;
+      padding: 0 8px 3px 1px;
+    }
+    .card-row2 .task { margin-top: 0; padding-left: 0; flex: 1; min-width: 0; }
+    .card-row2-right {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+
+    /* ── Add buttons: footer on desktop, header row on mobile ── */
+    .header-add { display: none; }
+    .sidebar-footer {
+      display: flex;
+      gap: 6px;
+      padding: 6px 10px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      flex-shrink: 0;
     }
 
     .add-btn {
@@ -365,13 +384,21 @@
       .wrap { position: static; flex: 1; display: flex; flex-direction: column; }
       .wrap iframe { position: static; inset: auto; width: 100%; height: auto; flex: 1; touch-action: manipulation; }
       .sidebar-header { padding: 4px 10px; font-size: 0.75rem; }
-      .card { padding: 4px 10px; cursor: pointer; }
+      /* One row per agent: card becomes a horizontal flex container */
+      .card { display: flex; align-items: center; padding: 3px 8px; cursor: pointer; gap: 4px; }
+      .card-top { flex: 1; min-width: 0; }
       .card-btn { visibility: visible; }
       .proj { font-size: 0.8rem; }
       .task { display: none; }
-      /* Compact header buttons on phone. */
-      .header-add { gap: 3px; margin-right: 6px; }
+      /* card-row2: strip task + compact, keep model/effort inline to the right */
+      .card-row2 { display: flex; margin: 0; padding: 0; flex-shrink: 0; }
+      .card-row2 .task { display: none; }
+      .card-btn.compact { display: none; }
+      .card-cfg { margin: 0; padding: 0; gap: 3px; }
+      .cfg { font-size: 0.58rem; padding: 1px 3px; }
       .add-btn { font-size: 0.68rem; padding: 2px 6px; }
+      .header-add { display: flex; gap: 3px; margin-left: auto; margin-right: 4px; }
+      .sidebar-footer { display: none; }
 
       .mob-input {
         display: flex;
@@ -431,10 +458,10 @@
 <body>
   <div class="sidebar">
     <div class="sidebar-header">
-      <span class="title">Agents <span style="font-size:0.5rem;color:#333" title="version">v7</span></span>
+      <span class="title">Agents <span style="font-size:0.5rem;color:#333" title="version">v8</span></span>
       <div class="header-add">
-        <button type="button" class="add-btn" id="addBtn" title="Добавить агента Claude">+ Claude</button>
-        <button type="button" class="add-btn" id="addOoBtn" title="Добавить агента Orchestra">+ Claw</button>
+        <button type="button" class="add-btn" id="addBtnH" title="Добавить агента Claude">+ Claude</button>
+        <button type="button" class="add-btn" id="addOoBtnH" title="Добавить агента Orchestra">+ Claw</button>
       </div>
       <div class="sys-stats" id="sysStats" onclick="this.classList.toggle('hidden');localStorage.setItem('stats-hidden',this.classList.contains('hidden'))">
         <span class="stat" id="cpuStat">CPU <span class="val" id="cpuVal">—</span></span>
@@ -442,6 +469,10 @@
       </div>
     </div>
     <div class="agent-list" id="list"></div>
+    <div class="sidebar-footer">
+      <button type="button" class="add-btn" id="addBtn" title="Добавить агента Claude">+ Claude</button>
+      <button type="button" class="add-btn" id="addOoBtn" title="Добавить агента Orchestra">+ Claw</button>
+    </div>
   </div>
   <div class="main">
     <div class="topbar" id="topbar" style="display:none">
@@ -506,6 +537,8 @@
     const list = document.getElementById('list');
     const addBtn = document.getElementById('addBtn');
     const addOoBtn = document.getElementById('addOoBtn');
+    const addBtnH = document.getElementById('addBtnH');
+    const addOoBtnH = document.getElementById('addOoBtnH');
     if (localStorage.getItem('stats-hidden') === 'true') document.getElementById('sysStats').classList.add('hidden');
 
     function build() {
@@ -533,19 +566,25 @@
             <option value="xhigh">xhigh</option>
             <option value="max">max</option>
           </select>`;
+        const row2controls = isOO ? '' : `
+          <div class="card-row2-right">
+            <button class="card-btn compact" title="Send /compact to TUI">⇲</button>
+            ${cfg}
+          </div>`;
         c.innerHTML = `
           <div class="card-top">
             <div class="proj empty" id="p${id}">&nbsp;</div>
             <div class="card-btns">
-              <button class="card-btn compact" title="Send /compact to TUI">⇲</button>
-              ${cfg}
               <button class="card-btn auto" id="a${id}" title="Auto-detect">A</button>
               <button class="card-btn edit" title="Edit name">✎</button>
               <button class="card-btn del" title="Remove">×</button>
               ${ooTag}<span class="dot off" id="d${id}"></span>
             </div>
           </div>
-          <div class="task" id="t${id}"></div>`;
+          <div class="card-row2">
+            <div class="task" id="t${id}"></div>
+            ${row2controls}
+          </div>`;
 
         // Click works on both mobile and desktop
         c.style.cursor = 'pointer';
@@ -645,8 +684,12 @@
     }
 
     function syncAddBtn() {
-      addBtn.classList.toggle('disabled', CLAUDE_IDS.every(id => order.includes(id)));
-      addOoBtn.classList.toggle('disabled', OO_IDS.every(id => order.includes(id)));
+      const claudeFull = CLAUDE_IDS.every(id => order.includes(id));
+      const ooFull = OO_IDS.every(id => order.includes(id));
+      addBtn.classList.toggle('disabled', claudeFull);
+      addOoBtn.classList.toggle('disabled', ooFull);
+      addBtnH.classList.toggle('disabled', claudeFull);
+      addOoBtnH.classList.toggle('disabled', ooFull);
     }
 
     addBtn.addEventListener('click', () => {
@@ -657,6 +700,19 @@
     });
 
     addOoBtn.addEventListener('click', () => {
+      const next = OO_IDS.find(id => !order.includes(id));
+      if (!next) return;
+      order.push(next);
+      save(); build(); applyData(); syncAddBtn();
+    });
+
+    addBtnH.addEventListener('click', () => {
+      const next = CLAUDE_IDS.find(id => !order.includes(id));
+      if (!next) return;
+      order.push(next);
+      save(); build(); applyData(); syncAddBtn();
+    });
+    addOoBtnH.addEventListener('click', () => {
       const next = OO_IDS.find(id => !order.includes(id));
       if (!next) return;
       order.push(next);
